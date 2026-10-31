@@ -1,8 +1,8 @@
-// 媒体订阅分下载器 · 页面（v1.2 同步版）
+// 媒体订阅分下载器 · 页面（v1.2.1 同步版）
 // 作用：选择“电影下载器 / 剧集下载器”（来自宿主 GET /api/pt/downloaders），
 // 读取 DIAN115 原生订阅并展示每个订阅当前/期望下载器，一键“同步订阅下载器”
 // 把订阅的 pt_downloader 按类型设为对应下载器（电影→电影下载器，剧集→剧集下载器）。
-// 由 DIAN115 原生流程扫描 PT 站点并派发到该下载器，插件不自行提交下载。
+// 新增订阅时宿主会发出 subscribe_added 事件，后台任务即时同步；另每 5 分钟兜底一次。
 // 配置仅保存在本插件存储（ctx.storage），不写入源码、不含任何凭据。
 export async function mount(root, ctx) {
   const doc = root.ownerDocument
@@ -14,8 +14,13 @@ export async function mount(root, ctx) {
 
   const h = doc.createElement('h2'); h.textContent = '媒体订阅 · 电影/剧集分下载器'; wrap.append(h)
   const note = doc.createElement('p'); note.className = 'note'
-  note.textContent = '选择电影/剧集下载器后，点“同步订阅下载器”会按订阅类型把 DIAN115 原生订阅的 pt_downloader 设为对应下载器（电影→电影下载器，剧集→剧集下载器）。由 DIAN115 原生流程扫描 PT 站点并派发到该下载器，插件不自行提交下载。定时任务每 30 分钟自动同步，新增订阅会自动按类型分配。'
+  note.textContent = '选择电影/剧集下载器后，点“同步订阅下载器”会按订阅类型把 DIAN115 原生订阅的 pt_downloader 设为对应下载器（电影→电影下载器，剧集→剧集下载器）。新增订阅时宿主会立即触发同步（无需等待），另有每 5 分钟兜底。由 DIAN115 原生流程扫描 PT 站点并派发到该下载器，插件不自行提交下载。'
   wrap.append(note)
+
+  // ⚠️ 状态必须先于任何读取它的函数调用初始化（否则 TDZ: Cannot access 'dlTv' before initialization）
+  let dlMovie = (await ctx.storage.get('dl_movie')) || ''
+  let dlTv = (await ctx.storage.get('dl_tv')) || ''
+  const lastSync = (await ctx.storage.get('last-sync')) || null
 
   const fs = doc.createElement('fieldset')
   const lg = doc.createElement('legend'); lg.textContent = '下载器（来自宿主 GET /api/pt/downloaders）'; fs.append(lg)
@@ -43,11 +48,6 @@ export async function mount(root, ctx) {
   actions.append(saveBtn); wrap.append(actions)
 
   const out = doc.createElement('pre'); out.setAttribute('aria-live', 'polite'); wrap.append(out)
-
-  // 状态
-  let dlMovie = (await ctx.storage.get('dl_movie')) || ''
-  let dlTv = (await ctx.storage.get('dl_tv')) || ''
-  const lastSync = (await ctx.storage.get('last-sync')) || null
   if (lastSync) out.textContent = `上次同步 ${lastSync.at}：分配 ${lastSync.ok}，保持 ${lastSync.skip}，失败 ${lastSync.fail}`
 
   saveBtn.addEventListener('click', async () => {
@@ -101,7 +101,8 @@ export async function mount(root, ctx) {
   syncBtn.addEventListener('click', async () => {
     out.textContent = '正在启动同步任务…'
     try {
-      const res = await ctx.tasks.run('sync-downloader', 'manual', { manual: true })
+      // 用唯一 business_key，避免与定时/事件任务去重返回旧结果
+      const res = await ctx.tasks.run('sync-downloader', 'manual_' + Date.now(), { manual: true })
       out.textContent = '已入队：' + JSON.stringify(res)
       setTimeout(() => renderSubs(), 1500)
     } catch (e) { out.textContent = '启动失败：' + e.message }
