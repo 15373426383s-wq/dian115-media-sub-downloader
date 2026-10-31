@@ -1,0 +1,33 @@
+{
+  "schema_version": 3,
+  "id": "media-sub-downloader",
+  "name": "媒体订阅分下载器",
+  "version": "1.1.0",
+  "description": "媒体订阅按电影/剧集分组自动分流下载器：电影订阅自动走电影下载器，剧集订阅自动走剧集下载器（qBittorrent / Transmission 等）。基于增量磁力缓存搜索，按 media_type 提交到对应下载器，无需为每个订阅单独选类型。",
+  "ui": { "entry": "ui/page.js" },
+  "jobs": [
+    {
+      "id": "scan",
+      "entry": "jobs/scan.js",
+      "handler": "run",
+      "recover": "recover",
+      "timeout_seconds": 1800,
+      "title": "媒体订阅扫描",
+      "default_schedule": "*/30 * * * *"
+    }
+  ],
+  "declared_usage": {
+    "apis": [
+      "GET /api/pt/downloaders",
+      "GET /api/cache/magnet/changes",
+      "POST /api/pt/download"
+    ],
+    "sites": ["磁力 / ED2K 缓存（宿主维护）"],
+    "files": ["插件 data/files 内的订阅与增量基线"],
+    "notifications": true,
+    "risk": "按订阅向宿主下载器提交磁力/种子，可发通知；不读取宿主文件内容，不转交 115"
+  },
+  "requires": { "api": "3.5" },
+  "icon": "ui/icon.svg",
+  "menu": { "title": "媒体订阅分下载器", "order": 90 }
+}
