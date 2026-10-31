@@ -68,9 +68,11 @@ export async function mount(root, ctx) {
     sel.addEventListener('change', () => { if (kind === 'movie') dlMovie = sel.value; else dlTv = sel.value })
     try {
       const r = await ctx.api.get('/api/pt/downloaders')
-      const list = (r.data || []).filter(d => d.enabled)
+      // 宿主返回的下载器未必带 enabled 字段；缺省/未显式 false 均视为可用
+      const list = (r.data || []).filter(d => d.enabled !== false)
       for (const d of list) {
-        const val = d.downloader || String(d.id)
+        // 宿主按“名称”匹配下载器：优先 downloader 字段，否则用 name（实测 id 字符串无效）
+        const val = d.downloader || d.name || String(d.id)
         const txt = d.name || d.downloader || String(d.id)
         const o = doc.createElement('option'); o.value = val; o.textContent = txt
         if ((kind === 'movie' ? dlMovie : dlTv) === val) o.selected = true

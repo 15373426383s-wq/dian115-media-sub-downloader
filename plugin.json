@@ -2,7 +2,7 @@
   "schema_version": 3,
   "id": "media-sub-downloader",
   "name": "媒体订阅分下载器",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "媒体订阅按电影/剧集分组自动分流下载器：电影订阅自动走电影下载器，剧集订阅自动走剧集下载器（qBittorrent / Transmission 等）。基于增量磁力缓存搜索，按 media_type 提交到对应下载器，无需为每个订阅单独选类型。",
   "ui": { "entry": "ui/page.js" },
   "jobs": [
