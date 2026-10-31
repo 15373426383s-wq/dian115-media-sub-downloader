@@ -1,0 +1,31 @@
+{
+  "schema_version": 3,
+  "repository": {
+    "id": "swgzy-dian115-plugins",
+    "name": "swgzy 的 DIAN115 插件",
+    "homepage": "https://github.com/15373426383s-wq/dian115-media-sub-downloader"
+  },
+  "plugins": [
+    {
+      "id": "media-sub-downloader",
+      "name": "媒体订阅分下载器",
+      "version": "1.1.0",
+      "description": "媒体订阅按电影/剧集分组自动分流下载器：电影订阅自动走电影下载器，剧集订阅自动走剧集下载器。基于 DIAN115 v3 增量磁力缓存搜索，按 media_type 提交到对应下载器。源码零凭据。",
+      "author": "swgzy",
+      "source_url": "https://github.com/15373426383s-wq/dian115-media-sub-downloader/releases/download/v1.1.0/media-sub-downloader.dian115p",
+      "sha256": "cb07901ad12be00ec79b944f2489c5ade07d4e7a9f697abdc6ea4c6ebd750930",
+      "delivery": "source",
+      "declared_usage": {
+        "apis": [
+          "GET /api/pt/downloaders",
+          "GET /api/cache/magnet/changes",
+          "POST /api/pt/download"
+        ],
+        "network": ["磁力 / ED2K 缓存（宿主维护）"],
+        "files": ["插件 data/files 内的订阅与增量基线"],
+        "notifications": true,
+        "risk": "按订阅向宿主下载器提交磁力/种子，可发通知；不读取宿主文件内容，不转交 115"
+      }
+    }
+  ]
+}
