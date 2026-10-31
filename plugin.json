@@ -2,30 +2,30 @@
   "schema_version": 3,
   "id": "media-sub-downloader",
   "name": "媒体订阅分下载器",
-  "version": "1.1.2",
-  "description": "媒体订阅按电影/剧集分组自动分流下载器：电影订阅自动走电影下载器，剧集订阅自动走剧集下载器（qBittorrent / Transmission 等）。基于增量磁力缓存搜索，按 media_type 提交到对应下载器，无需为每个订阅单独选类型。",
+  "version": "1.2.0",
+  "description": "把 DIAN115 原生媒体订阅按类型自动分配到对应 PT 下载器：电影订阅 → 电影下载器，剧集订阅 → 剧集下载器。直接写入订阅自带的 pt_downloader 字段，由 DIAN115 原生流程扫描 PT 站点并派发下载，插件不自行提交磁力/种子。定时或手动同步，新增订阅自动按类型分配。",
   "ui": { "entry": "ui/page.js" },
   "jobs": [
     {
-      "id": "scan",
-      "entry": "jobs/scan.js",
+      "id": "sync-downloader",
+      "entry": "jobs/sync-downloader.js",
       "handler": "run",
       "recover": "recover",
-      "timeout_seconds": 1800,
-      "title": "媒体订阅扫描",
+      "timeout_seconds": 300,
+      "title": "同步订阅下载器",
       "default_schedule": "*/30 * * * *"
     }
   ],
   "declared_usage": {
     "apis": [
       "GET /api/pt/downloaders",
-      "GET /api/cache/magnet/changes",
-      "POST /api/pt/download"
+      "GET /api/subscribe/pool/intents",
+      "PATCH /api/subscribe/pool/intents/{id}/preferences"
     ],
-    "sites": ["磁力 / ED2K 缓存（宿主维护）"],
-    "files": ["插件 data/files 内的订阅与增量基线"],
+    "sites": ["PT 站点（由 DIAN115 原生订阅扫描，插件不直连）"],
+    "files": ["插件 data/files 内的同步记录"],
     "notifications": true,
-    "risk": "按订阅向宿主下载器提交磁力/种子，可发通知；不读取宿主文件内容，不转交 115"
+    "risk": "仅写入订阅的 pt_downloader 字段（按类型分配下载器），不读取宿主文件内容，不自行提交下载，不转交 115"
   },
   "requires": { "api": "3.5" },
   "icon": "ui/icon.svg",
