@@ -2,7 +2,8 @@
   "schema_version": 3,
   "id": "media-sub-downloader",
   "name": "媒体订阅分下载器",
-  "version": "1.2.1",
+  "author": "swgzy",
+  "version": "1.2.2",
   "description": "把 DIAN115 原生媒体订阅按类型自动分配到对应 PT 下载器：电影订阅 → 电影下载器，剧集订阅 → 剧集下载器。直接写入订阅自带的 pt_downloader 字段，由 DIAN115 原生流程扫描 PT 站点并派发下载，插件不自行提交磁力/种子。新增订阅时由 subscribe_added 事件即时同步，另有每 5 分钟兜底。",
   "ui": { "entry": "ui/page.js" },
   "jobs": [

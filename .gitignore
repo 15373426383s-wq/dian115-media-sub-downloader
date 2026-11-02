@@ -1,3 +1,13 @@
 # 不提交任何本地存储/凭据/运行产物
 *.local.json
 data/
+
+# === 凭证与本地存储：绝不提交（防止明文密钥泄露到公开仓库） ===
+config.local.*
+cookies*
+cookie-*.json
+*.secret
+*.dian115p
+.env
+.env.*
+.secrets/
