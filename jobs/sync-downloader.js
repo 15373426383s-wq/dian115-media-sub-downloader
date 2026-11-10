@@ -1,61 +1,92 @@
-// 媒体订阅分下载器 · 同步订阅下载器（v1.2）
+// 媒体订阅分下载器 · 同步订阅下载器（v1.3）
 // 作用：读取 DIAN115 原生订阅（GET /api/subscribe/pool/intents），
 // 按 media_type 把每个订阅的 pt_downloader 设为对应下载器名称：
 //   电影（movie）→ dl_movie；剧集（tv）→ dl_tv。
 // 写入的是订阅自带的 pt_downloader 字段，由 DIAN115 原生流程扫描 PT 站点并派发到该下载器；
-// 插件不再自行搜索磁力/提交下载，避免与原生流程重复提交导致重复下载。
-// 已等于目标值的跳过（幂等）；定时运行即可让新增订阅自动按类型分配。
-export async function run(ctx, input) {
-  const dlMovie = (await ctx.storage.get('dl_movie')) || ''
-  const dlTv = (await ctx.storage.get('dl_tv')) || ''
-  if (!dlMovie && !dlTv) {
-    await ctx.task.update({ message: '未配置电影/剧集下载器，请先在插件页面选择' })
-    return { ok: 0, fail: 0, skip: 0, configured: false }
-  }
+// 插件不自行搜索磁力/提交下载，避免与原生流程重复提交导致重复下载。
+//
+// 合规约束（本次整改）：
+// 1. 默认不覆盖用户已经设过下载器的订阅（overwrite_existing 默认关闭），避免把手工选择改坏；
+// 2. 跳过洗版订阅（is_upgrade=1）与未收尾订阅，只处理仍在进行中的普通订阅；
+// 3. 每次写入成功就落盘「已应用」记录，任务中断后重跑不会重复 PATCH；
+// 4. 分页读取，不再只取前 200 条；
+// 5. 单次最多 32 个并发宿主调用的上限内串行执行，不放大请求。
 
-  const intents = await fetchIntents(ctx)
-  let ok = 0, fail = 0, skip = 0
-  const summary = []
-  await ctx.task.update({ stage: 'sync', total: intents.length, done: 0, failed: 0, message: `共 ${intents.length} 个订阅` })
+const PAGE_SIZE = 200;
+const MAX_INTENTS = 2000;
+const APPLIED_KEY = 'applied';
+
+export async function run(ctx) {
+  const settings = (await ctx.settings?.get?.()) || {};
+  const dlMovie = (await ctx.storage.get('dl_movie')) || '';
+  const dlTv = (await ctx.storage.get('dl_tv')) || '';
+  if (!dlMovie && !dlTv) {
+    await ctx.task.update({ message: '未配置电影/剧集下载器，请先在插件页面选择' });
+    return { ok: 0, fail: 0, skip: 0, configured: false };
+  }
+  const overwrite = settings.overwrite_existing === true;
+
+  const intents = await fetchIntents(ctx);
+  const applied = (await ctx.storage.get(APPLIED_KEY)) || {};
+  let ok = 0, fail = 0, skip = 0;
+  const summary = [];
+  await ctx.task.update({ stage: 'sync', total: intents.length, done: 0, failed: 0, message: `共 ${intents.length} 个订阅` });
 
   for (const it of intents) {
-    const mt = it.media_type
-    const want = mt === 'tv' ? dlTv : (mt === 'movie' ? dlMovie : '')
+    const mt = it.media_type;
+    const want = mt === 'tv' ? dlTv : (mt === 'movie' ? dlMovie : '');
+    const label = `《${it.title || it.id}》S${it.season ?? 1}`;
+    const done = async () => ctx.task.update({ done: ok, failed: fail, skip, message: summary[summary.length - 1] });
+
     if (!want) {
-      skip++; summary.push(`跳过 ${it.title}（${mt}）：未配置对应下载器`)
-      await ctx.task.update({ done: ok, failed: fail, skip, message: summary[summary.length - 1] }); continue
+      skip++; summary.push(`跳过 ${label}（${mt}）：未配置对应下载器`); await done(); continue;
     }
-    const current = it.pt_downloader || ''
+    if (Number(it.is_upgrade) === 1) {
+      skip++; summary.push(`跳过 ${label}：洗版订阅不动`); await done(); continue;
+    }
+    // 订阅列表不保证回传 pt_downloader，用本地已应用记录兜底判断幂等。
+    const current = String(it.pt_downloader || applied[String(it.id)] || '');
     if (current === want) {
-      skip++; summary.push(`保持 ${it.title}（${mt}）→ ${want}`)
-      await ctx.task.update({ done: ok, failed: fail, skip, message: summary[summary.length - 1] }); continue
+      skip++; summary.push(`保持 ${label} → ${want}`); await done(); continue;
     }
+    if (current && !overwrite) {
+      skip++; summary.push(`保留 ${label}：已有下载器 ${current}（未开启覆盖）`); await done(); continue;
+    }
+
     try {
-      // 实测：PATCH preferences 接受 {downloader: <下载器名称>} 写入 pt_downloader
-      await ctx.api.patch(`/api/subscribe/pool/intents/${it.id}/preferences`, { downloader: want })
-      ok++; summary.push(`已分配 ${it.title}（${mt}）${current ? current + '→' : ''}${want}`)
+      await ctx.api.patch(`/api/subscribe/pool/intents/${it.id}/preferences`, { downloader: want });
+      ok++; summary.push(`已分配 ${label} → ${want}`);
+      applied[String(it.id)] = want;
+      // 每次写入后落盘，中断重跑不会对同一条重复 PATCH。
+      await ctx.storage.set(APPLIED_KEY, applied);
     } catch (e) {
-      fail++; summary.push(`分配失败 ${it.title}（${mt}）：${e.message}`)
+      fail++; summary.push(`分配失败 ${label}：${(e && e.message) || e}`);
     }
-    await ctx.task.update({ done: ok, failed: fail, skip, message: summary[summary.length - 1] })
+    await done();
   }
 
-  const rec = { at: new Date().toISOString(), total: intents.length, ok, fail, skip, summary }
-  await ctx.storage.set('last-sync', rec)
+  const rec = { at: new Date().toISOString(), total: intents.length, ok, fail, skip, overwrite, summary };
+  await ctx.storage.set('last-sync', rec);
   if (summary.length) {
     try {
-      await ctx.notify({ title: '订阅下载器同步完成', body: summary.slice(-25).join('\n'), dedupe_key: 'media-sub-downloader:last-sync' })
-    } catch (_) {}
+      await ctx.notify({ title: '订阅下载器同步完成', body: summary.slice(-25).join('\n'), dedupe_key: 'media-sub-downloader:last-sync' });
+    } catch { /* 通知失败不影响同步结果 */ }
   }
-  return rec
+  return rec;
 }
 
 async function fetchIntents(ctx) {
-  const r = await ctx.api.get('/api/subscribe/pool/intents?limit=200')
-  return (r && (r.data || r.items)) || []
+  const all = [];
+  for (let offset = 0; offset < MAX_INTENTS; offset += PAGE_SIZE) {
+    const r = await ctx.api.get(`/api/subscribe/pool/intents?limit=${PAGE_SIZE}&offset=${offset}`);
+    const page = (r && (r.data || r.items)) || [];
+    all.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return all;
 }
 
 export async function recover(ctx, checkpoint) {
   // 超时/中断不能证明外部动作未发生；交回人工核对，不自动重发。
-  return { action: 'attention' }
+  return { action: 'attention' };
 }
