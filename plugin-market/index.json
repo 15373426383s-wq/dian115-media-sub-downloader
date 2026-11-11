@@ -11,7 +11,7 @@
       "name": "媒体订阅分下载器",
       "version": "1.2.1",
       "description": "把 DIAN115 原生媒体订阅按电影/剧集类型自动分配到对应 PT 下载器：直接写入订阅的 pt_downloader 字段，由 DIAN115 原生流程扫描 PT 站点并派发下载，插件不自行提交。新增订阅时由 subscribe_added 事件即时同步，另有每 5 分钟兜底。源码零凭据。",
-      "author": "swgzy",
+      "author": "哆啦A豆",
       "source_url": "https://github.com/15373426383s-wq/dian115-media-sub-downloader/releases/download/v1.2.1/media-sub-downloader.dian115p",
       "sha256": "39bf4baccce0c0369364eb7b4170146f7ca21ef386aa959f8b9c3df20e7343e9",
       "delivery": "source",
@@ -21,8 +21,12 @@
           "GET /api/subscribe/pool/intents",
           "PATCH /api/subscribe/pool/intents/{id}/preferences"
         ],
-        "network": ["PT 站点（由 DIAN115 原生订阅扫描，插件不直连）"],
-        "files": ["插件 data/files 内的同步记录"],
+        "network": [
+          "PT 站点（由 DIAN115 原生订阅扫描，插件不直连）"
+        ],
+        "files": [
+          "插件 data/files 内的同步记录"
+        ],
         "notifications": true,
         "risk": "仅写入订阅的 pt_downloader 字段（按类型分配下载器），不读取宿主文件内容，不自行提交下载，不转交 115"
       }
